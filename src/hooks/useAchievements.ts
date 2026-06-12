@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { UserProfile, Transaction, Investment } from '../types';
 
 export interface Achievement {
@@ -21,10 +21,10 @@ export const useAchievements = (
   investments: Investment[],
   prices: Record<string, number> = {}
 ): Achievement[] => {
+  const [now] = useState(() => Date.now());
+
   return useMemo(() => {
     if (!child) return [];
-
-    const now = Date.now();
 
     // 1. CALCULATE CURRENT TOTAL WEALTH
     const freiesGuthaben = child.balance || 0;
@@ -413,5 +413,5 @@ export const useAchievements = (
     ];
 
     return list;
-  }, [child, transactions, investments, prices]);
+  }, [child, transactions, investments, prices, now]);
 };

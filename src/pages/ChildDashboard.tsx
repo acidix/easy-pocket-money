@@ -21,7 +21,8 @@ import {
   PieChart,
   ArrowUpRight,
   ArrowDownRight,
-  CreditCard
+  CreditCard,
+  Key
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -205,6 +206,7 @@ export const ChildDashboard: React.FC = () => {
     // Find any badge that is unlocked but NOT acknowledged yet
     const newBadge = achievements.find(a => a.unlocked && !ackIds.includes(a.id));
     if (newBadge) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNewlyUnlockedBadge(newBadge);
     }
   }, [achievements, user]);
@@ -257,6 +259,40 @@ export const ChildDashboard: React.FC = () => {
   const [depositAmount, setDepositAmount] = useState('');
   const [depositError, setDepositError] = useState<string | null>(null);
   const [depositSuccess, setDepositSuccess] = useState<string | null>(null);
+
+  // PIN change states
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [oldPin, setOldPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinSuccess, setPinSuccess] = useState<string | null>(null);
+
+  const handleUpdatePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError(null);
+    setPinSuccess(null);
+
+    if (!user) return;
+    
+    if (newPin.trim().length < 6) {
+      setPinError('Die neue PIN muss mindestens 6 Zeichen lang sein.');
+      return;
+    }
+
+    try {
+      await pocketMoneyService.changeChildPin(user.uid, oldPin.trim(), newPin.trim());
+      setPinSuccess('Deine PIN wurde erfolgreich geändert! 🎉');
+      setOldPin('');
+      setNewPin('');
+      setTimeout(() => {
+        setIsPinModalOpen(false);
+        setPinSuccess(null);
+      }, 2000);
+    } catch (err: unknown) {
+      console.error(err);
+      setPinError(err instanceof Error ? err.message : 'Fehler beim Ändern der PIN.');
+    }
+  };
 
   const handleGiroDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -507,9 +543,13 @@ export const ChildDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-align-center" style={{ gap: '1.25rem', flexWrap: 'wrap' }}>
+        <div className="flex-align-center" style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
           <ThemePicker />
-          <button type="button" className="btn btn-secondary" onClick={logout}>
+          <button type="button" className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }} onClick={() => setIsPinModalOpen(true)}>
+            <Key size={16} />
+            <span>PIN ändern</span>
+          </button>
+          <button type="button" className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }} onClick={logout}>
             <LogOut size={16} />
             <span>Abmelden</span>
           </button>
@@ -1543,7 +1583,59 @@ export const ChildDashboard: React.FC = () => {
         </form>
       </Modal>
 
+      {/* Change PIN Modal */}
+      <Modal
+        isOpen={isPinModalOpen}
+        onClose={() => {
+          setIsPinModalOpen(false);
+          setOldPin('');
+          setNewPin('');
+          setPinError(null);
+          setPinSuccess(null);
+        }}
+        title="PIN-Code ändern 🔐"
+      >
+        <form onSubmit={handleUpdatePin}>
+          {pinError && (
+            <div style={{ background: 'var(--color-danger-bg)', color: 'var(--color-danger)', padding: '0.75rem', borderRadius: '10px', fontSize: '0.85rem', marginBottom: '1rem', fontWeight: 500 }}>
+              {pinError}
+            </div>
+          )}
+          {pinSuccess && (
+            <div style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '0.75rem', borderRadius: '10px', fontSize: '0.85rem', marginBottom: '1rem', fontWeight: 500 }}>
+              {pinSuccess}
+            </div>
+          )}
 
+          <div className="form-group">
+            <label className="form-label">Alte PIN</label>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="Deine aktuelle PIN"
+              value={oldPin}
+              onChange={e => setOldPin(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+            <label className="form-label">Neue PIN</label>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="Deine neue PIN (mind. 6 Zeichen)"
+              value={newPin}
+              onChange={e => setNewPin(e.target.value)}
+              required
+            />
+          </div>
+
+          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+            PIN speichern
+          </button>
+        </form>
+      </Modal>
 
       {/* Achievement Unlocked Celebration Modal */}
       <Modal

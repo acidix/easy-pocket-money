@@ -9,7 +9,10 @@ import {
   signOut as fbSignOut, 
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  onAuthStateChanged as fbOnAuthStateChanged
+  onAuthStateChanged as fbOnAuthStateChanged,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { 
@@ -760,7 +763,7 @@ class MockDatabase {
       createdBy: 'child',
       giroDelta: amount,
       giroBalanceAfter: newGiro
-    } as any);
+    });
 
     // Update giroBalance (since addTransaction already saved users, reload users and update giroBalance)
     const updatedUsers = this.getUsers();
@@ -774,6 +777,15 @@ class MockDatabase {
       localStorage.setItem('EPM_SESSION', JSON.stringify(this.currentUser));
       this.notifyAuthListeners();
     }
+  }
+
+  public async changeChildPin(userId: string, oldPin: string, newPin: string) {
+    const pins = JSON.parse(localStorage.getItem('EPM_PINS') || '{}');
+    if (pins[userId] !== oldPin) {
+      throw new Error('Die alte PIN ist nicht korrekt.');
+    }
+    pins[userId] = newPin;
+    localStorage.setItem('EPM_PINS', JSON.stringify(pins));
   }
 
   public async createInvestment(inv: Omit<Investment, 'id'>): Promise<Investment> {
@@ -1377,6 +1389,31 @@ export const pocketMoneyService = {
         giroBalance: newGiro
       });
     });
+  },
+
+  changeChildPin: async (userId: string, oldPin: string, newPin: string) => {
+    if (isDemoMode) {
+      return mockDb.changeChildPin(userId, oldPin, newPin);
+    }
+
+    const currentUser = fbAuth.currentUser;
+    if (!currentUser) throw new Error('Nicht eingeloggt.');
+
+    const credential = EmailAuthProvider.credential(currentUser.email!, oldPin);
+    try {
+      await reauthenticateWithCredential(currentUser, credential);
+      await updatePassword(currentUser, newPin);
+    } catch (error: unknown) {
+      console.error('[pocketMoneyService.changeChildPin] error:', error);
+      const err = error as { code?: string; message?: string };
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        throw new Error('Die alte PIN ist nicht korrekt.', { cause: error });
+      }
+      if (err.code === 'auth/weak-password') {
+        throw new Error('Die neue PIN muss mindestens 6 Zeichen lang sein.', { cause: error });
+      }
+      throw new Error('Fehler beim Ändern der PIN: ' + (err.message || String(error)), { cause: error });
+    }
   },
 
   subscribeToInvestments: (userId: string, callback: (investments: Investment[]) => void) => {

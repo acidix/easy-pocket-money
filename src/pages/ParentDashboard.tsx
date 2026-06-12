@@ -422,7 +422,7 @@ export const ParentDashboard: React.FC = () => {
           createdBy: 'parent',
           giroDelta: delta,
           giroBalanceAfter: amountNum
-        } as any);
+        });
       }
 
       setActiveModal(null);

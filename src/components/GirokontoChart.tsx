@@ -85,6 +85,7 @@ export const GirokontoChart: React.FC<GirokontoChartProps> = ({
       minDate: startDateLimit,
       maxDate: now
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [child.giroBalance, txsSignature, now, historyDays]);
 
   const { points, minDate, maxDate } = chartData;

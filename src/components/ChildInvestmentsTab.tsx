@@ -217,7 +217,13 @@ export const ChildInvestmentsTab: React.FC<ChildInvestmentsTabProps> = ({
     }
   };
 
-  const handleOpenSell = (inv: any) => {
+  const handleOpenSell = (inv: Investment & {
+    currentValue: number;
+    profit: number;
+    profitPercent: number;
+    remainingDays?: number;
+    currentPrice?: number;
+  }) => {
     setSelectedInvForSell(inv);
     setSellType('all');
     setSellAmount('');
