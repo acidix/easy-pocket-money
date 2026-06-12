@@ -15,6 +15,8 @@ export interface UserProfile {
   email?: string;              // Email (only for parents / Google logins)
   role: UserRole;
   parentIds: string[];         // List of parent uids linked to this child (empty for parents)
+  parentEmails?: string[];     // List of parent emails linked to this child (empty for parents)
+  pendingParentEmails?: string[]; // List of invited parent emails waiting to be linked (empty for parents)
   allowances: Allowance[];     // List of allowance configurations for this child (empty for parents)
   currency: string;            // e.g. 'EUR', 'CHF', 'USD' (child specific)
   balance: number;             // Current calculated balance

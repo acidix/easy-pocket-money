@@ -27,7 +27,9 @@ import {
   writeBatch,
   getDocs,
   deleteDoc,
-  runTransaction
+  runTransaction,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import type { UserProfile, Transaction, AllowanceInterval, InvestmentOffer, Investment } from '../types';
 
@@ -351,7 +353,10 @@ class MockDatabase {
       this.saveUsers(users);
     }
 
-    this.currentUser = users[mockGoogleUid];
+    const parent = users[mockGoogleUid];
+    await this.checkPendingInvitations(parent.uid, parent.email || 'eltern@easy-pocket-money.de');
+
+    this.currentUser = this.getUsers()[mockGoogleUid];
     localStorage.setItem('EPM_SESSION', JSON.stringify(this.currentUser));
     this.notifyAuthListeners();
     return this.currentUser;
@@ -474,12 +479,15 @@ class MockDatabase {
     }
 
     const childUid = 'child_' + generateId();
+    const parentEmail = this.currentUser?.email || 'eltern@easy-pocket-money.de';
     const newChild: UserProfile = {
       uid: childUid,
       name,
       username: cleanUsername,
       role: 'child',
       parentIds: [parentUid],
+      parentEmails: [parentEmail],
+      pendingParentEmails: [],
       allowances: [],
       currency,
       balance: 0,
@@ -517,6 +525,75 @@ class MockDatabase {
     users[child.uid] = child;
     this.saveUsers(users);
     return child;
+  }
+
+  public async shareChildWithParent(childId: string, parentEmail: string): Promise<{ status: 'linked' | 'pending'; email: string }> {
+    const users = this.getUsers();
+    const child = users[childId];
+    if (!child || child.role !== 'child') {
+      throw new Error('Kind-Account nicht gefunden.');
+    }
+
+    const emailClean = parentEmail.trim().toLowerCase();
+    if (!child.parentEmails) child.parentEmails = [];
+    if (!child.pendingParentEmails) child.pendingParentEmails = [];
+
+    // Find parent by email in mock users
+    const parent = Object.values(users).find(
+      u => u.role === 'parent' && u.email?.toLowerCase() === emailClean
+    );
+
+    if (!parent) {
+      if (child.pendingParentEmails.includes(emailClean)) {
+        throw new Error(`Eine Einladung für '${parentEmail}' ist bereits ausstehend.`);
+      }
+      if (child.parentEmails.includes(emailClean)) {
+        throw new Error(`Dieses Konto ist bereits mit '${parentEmail}' verknüpft.`);
+      }
+      child.pendingParentEmails.push(emailClean);
+      users[childId] = child;
+      this.saveUsers(users);
+      return { status: 'pending', email: emailClean };
+    }
+
+    if (child.parentIds.includes(parent.uid)) {
+      throw new Error(`Dieses Konto ist bereits mit '${parentEmail}' geteilt.`);
+    }
+
+    child.parentIds.push(parent.uid);
+    if (!child.parentEmails.includes(emailClean)) {
+      child.parentEmails.push(emailClean);
+    }
+    child.pendingParentEmails = child.pendingParentEmails.filter(e => e !== emailClean);
+
+    users[childId] = child;
+    this.saveUsers(users);
+    return { status: 'linked', email: emailClean };
+  }
+
+  public async checkPendingInvitations(parentUid: string, parentEmail: string): Promise<void> {
+    const users = this.getUsers();
+    let changed = false;
+    const emailClean = parentEmail.trim().toLowerCase();
+
+    Object.values(users).forEach(u => {
+      if (u.role === 'child' && u.pendingParentEmails?.includes(emailClean)) {
+        if (!u.parentIds.includes(parentUid)) {
+          u.parentIds.push(parentUid);
+        }
+        if (!u.parentEmails) u.parentEmails = [];
+        if (!u.parentEmails.includes(emailClean)) {
+          u.parentEmails.push(emailClean);
+        }
+        u.pendingParentEmails = u.pendingParentEmails.filter(e => e !== emailClean);
+        users[u.uid] = u;
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      this.saveUsers(users);
+    }
   }
 
   public subscribeToChildren(parentUid: string, callback: (children: UserProfile[]) => void) {
@@ -958,6 +1035,8 @@ export const pocketMoneyService = {
             await batch.commit();
             profile = updatedChild;
           }
+        } else if (profile.role === 'parent' && profile.email) {
+          pocketMoneyService.checkPendingInvitations(profile.uid, profile.email).catch(console.error);
         }
         callback(profile);
       } else {
@@ -973,6 +1052,9 @@ export const pocketMoneyService = {
           balance: 0
         };
         await setDoc(userDocRef, newParent);
+        if (newParent.email) {
+          pocketMoneyService.checkPendingInvitations(newParent.uid, newParent.email).catch(console.error);
+        }
         callback(newParent);
       }
     });
@@ -1117,12 +1199,15 @@ export const pocketMoneyService = {
       const credential = await createUserWithEmailAndPassword(fbAuth, email, pin);
       const childUid = credential.user.uid;
 
+      const parentEmail = fbAuth.currentUser?.email || '';
       const newChild: UserProfile = {
         uid: childUid,
         name,
         username: cleanUsername,
         role: 'child',
         parentIds: [parentUid],
+        parentEmails: parentEmail ? [parentEmail] : [],
+        pendingParentEmails: [],
         allowances: [],
         currency,
         balance: 0,
@@ -1149,13 +1234,88 @@ export const pocketMoneyService = {
       return mockDb.linkParentToChild(cleanUsername, parentUid);
     }
 
-    // Find the child in firestore
-    // We cannot query client-side easily without permissions, but since parents can read children, we can use a query
-    // Wait, Firestore query is fine if security rules permit it. Or parents can query the users collection where username == cleanUsername.
-    // Let's assume we retrieve the child's ID by a query:
     throw new Error('Das Hinzufügen bestehender Kinder zu weiteren Eltern ist in der Cloud-Version derzeit nur über den Support möglich.');
-    // Let's implement this on Mock only or we can do a Firestore collectionGroup / query if rules allow.
-    // For simplicity in UI, we'll expose a link action.
+  },
+
+  shareChildWithParent: async (childId: string, parentEmail: string): Promise<{ status: 'linked' | 'pending'; email: string }> => {
+    if (isDemoMode) {
+      return mockDb.shareChildWithParent(childId, parentEmail);
+    }
+
+    const emailClean = parentEmail.trim().toLowerCase();
+    
+    // Find parent by email
+    const parentQuery = query(
+      collection(fbDb, 'users'),
+      where('role', '==', 'parent'),
+      where('email', '==', emailClean)
+    );
+    const parentSnap = await getDocs(parentQuery);
+
+    const childRef = doc(fbDb, 'users', childId);
+    const childSnap = await getDoc(childRef);
+    if (!childSnap.exists()) {
+      throw new Error('Kind-Account nicht gefunden.');
+    }
+    const childData = childSnap.data() as UserProfile;
+    const parentEmails = childData.parentEmails || [];
+    const pendingParentEmails = childData.pendingParentEmails || [];
+
+    if (parentEmails.includes(emailClean)) {
+      throw new Error(`Dieses Konto ist bereits mit '${parentEmail}' verknüpft.`);
+    }
+
+    if (parentSnap.empty) {
+      if (pendingParentEmails.includes(emailClean)) {
+        throw new Error(`Eine Einladung für '${parentEmail}' ist bereits ausstehend.`);
+      }
+      await updateDoc(childRef, {
+        pendingParentEmails: arrayUnion(emailClean)
+      });
+      return { status: 'pending', email: emailClean };
+    }
+
+    const parentUid = parentSnap.docs[0].id;
+    if (childData.parentIds.includes(parentUid)) {
+      throw new Error(`Dieses Konto ist bereits mit '${parentEmail}' geteilt.`);
+    }
+
+    await updateDoc(childRef, {
+      parentIds: arrayUnion(parentUid),
+      parentEmails: arrayUnion(emailClean),
+      pendingParentEmails: arrayRemove(emailClean)
+    });
+
+    return { status: 'linked', email: emailClean };
+  },
+
+  checkPendingInvitations: async (parentUid: string, parentEmail: string): Promise<void> => {
+    if (isDemoMode) {
+      return mockDb.checkPendingInvitations(parentUid, parentEmail);
+    }
+
+    const emailClean = parentEmail.trim().toLowerCase();
+    
+    const inviteQuery = query(
+      collection(fbDb, 'users'),
+      where('role', '==', 'child'),
+      where('pendingParentEmails', 'array-contains', emailClean)
+    );
+
+    const snap = await getDocs(inviteQuery);
+    if (snap.empty) return;
+
+    const batch = writeBatch(fbDb);
+    snap.docs.forEach(childDoc => {
+      const childRef = childDoc.ref;
+      batch.update(childRef, {
+        parentIds: arrayUnion(parentUid),
+        parentEmails: arrayUnion(emailClean),
+        pendingParentEmails: arrayRemove(emailClean)
+      });
+    });
+
+    await batch.commit();
   },
 
   subscribeToChildren: (parentUid: string, callback: (children: UserProfile[]) => void) => {

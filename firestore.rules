@@ -14,6 +14,10 @@ service cloud.firestore {
     function isParentOf(childData) {
       return isSignedIn() && childData != null && ('parentIds' in childData) && (request.auth.uid in childData.parentIds);
     }
+
+    function isPendingParentOf(childData) {
+      return isSignedIn() && childData != null && ('pendingParentEmails' in childData) && ('email' in request.auth.token) && (request.auth.token.email in childData.pendingParentEmails);
+    }
     
     function getChildProfile(childId) {
       return get(/databases/$(database)/documents/users/$(childId)).data;
@@ -21,7 +25,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow create: if isSignedIn();
-      allow read, update, delete: if isOwner(userId) || isParentOf(resource.data);
+      allow read, update: if isOwner(userId) || isParentOf(resource.data) || isPendingParentOf(resource.data);
+      allow delete: if isOwner(userId) || isParentOf(resource.data);
     }
     
     match /transactions/{transactionId} {

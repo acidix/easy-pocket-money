@@ -18,7 +18,8 @@ import {
   DollarSign, 
   Users, 
   Clock,
-  CreditCard
+  CreditCard,
+  Share2
 } from 'lucide-react';
 
 const CURRENCIES = [
@@ -38,7 +39,7 @@ const INTERVAL_LABELS: Record<AllowanceInterval, string> = {
 interface ChildCardProps {
   child: UserProfile;
   getCurrencySymbol: (code: string) => string;
-  openModal: (modalName: 'createChild' | 'adjustBalance' | 'manageAllowances' | 'viewTransactions' | 'adjustGiro', child: UserProfile | null) => void;
+  openModal: (modalName: 'createChild' | 'adjustBalance' | 'manageAllowances' | 'viewTransactions' | 'adjustGiro' | 'shareChild', child: UserProfile | null) => void;
   parentApiKey?: string;
 }
 
@@ -99,7 +100,29 @@ const ChildCard: React.FC<ChildCardProps> = ({ child, getCurrencySymbol, openMod
       {/* Child Card Header */}
       <div className="flex-between" style={{ alignItems: 'flex-start' }}>
         <div>
-          <h4 style={{ fontSize: '1.3rem', fontWeight: 800 }}>{child.name}</h4>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <h4 style={{ fontSize: '1.3rem', fontWeight: 800 }}>{child.name}</h4>
+            <button 
+              type="button" 
+              style={{ 
+                background: 'transparent', 
+                border: 'none', 
+                color: 'var(--text-secondary)', 
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0.2rem',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease',
+                outline: 'none'
+              }}
+              onClick={() => openModal('shareChild', child)}
+              title="Konto mit anderem Elternteil teilen"
+            >
+              <Share2 size={16} />
+            </button>
+          </div>
           <span className="badge badge-warning" style={{ fontSize: '0.7rem', marginTop: '0.25rem' }}>
             @{child.username}
           </span>
@@ -271,7 +294,7 @@ export const ParentDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'children' | 'investments'>('children');
 
   // Modal control states
-  const [activeModal, setActiveModal] = useState<'createChild' | 'adjustBalance' | 'manageAllowances' | 'viewTransactions' | 'adjustGiro' | null>(null);
+  const [activeModal, setActiveModal] = useState<'createChild' | 'adjustBalance' | 'manageAllowances' | 'viewTransactions' | 'adjustGiro' | 'shareChild' | null>(null);
   const [selectedChild, setSelectedChild] = useState<UserProfile | null>(null);
 
   // Form states - Create Child
@@ -295,6 +318,11 @@ export const ParentDashboard: React.FC = () => {
   const [allowanceAmount, setAllowanceAmount] = useState('');
   const [allowanceInterval, setAllowanceInterval] = useState<AllowanceInterval>('weekly');
 
+  // Form states - Share Child
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareSuccess, setShareSuccess] = useState<string | null>(null);
+  const [shareInvitePending, setShareInvitePending] = useState(false);
+
   // Load transactions of selected child for detail view
   const { transactions: childTransactions } = useTransactions(selectedChild?.uid);
 
@@ -302,7 +330,7 @@ export const ParentDashboard: React.FC = () => {
     return CURRENCIES.find(c => c.code === code)?.symbol || code;
   };
 
-  const openModal = (modalName: 'createChild' | 'adjustBalance' | 'manageAllowances' | 'viewTransactions' | 'adjustGiro', child: UserProfile | null) => {
+  const openModal = (modalName: 'createChild' | 'adjustBalance' | 'manageAllowances' | 'viewTransactions' | 'adjustGiro' | 'shareChild', child: UserProfile | null) => {
     setSelectedChild(child);
     setFormError(null);
     setActiveModal(modalName);
@@ -324,6 +352,10 @@ export const ParentDashboard: React.FC = () => {
       setAllowanceInterval('weekly');
     } else if (modalName === 'adjustGiro') {
       setGiroAmount(child?.giroBalance?.toString() || '0');
+    } else if (modalName === 'shareChild') {
+      setShareEmail('');
+      setShareSuccess(null);
+      setShareInvitePending(false);
     }
   };
 
@@ -429,6 +461,39 @@ export const ParentDashboard: React.FC = () => {
     } catch (err: unknown) {
       console.error(err);
       setFormError(err instanceof Error ? err.message : 'Fehler beim Aktualisieren des Girokontos.');
+    }
+  };
+
+  const handleShareChild = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    setShareSuccess(null);
+    setShareInvitePending(false);
+
+    if (!selectedChild) return;
+    const emailClean = shareEmail.trim().toLowerCase();
+
+    if (!emailClean) {
+      setFormError('Bitte gib eine E-Mail-Adresse ein.');
+      return;
+    }
+
+    try {
+      const res = await pocketMoneyService.shareChildWithParent(selectedChild.uid, emailClean);
+      if (res.status === 'pending') {
+        setShareInvitePending(true);
+        setShareSuccess(`Einladung für '${shareEmail.trim()}' vorgemerkt! Da diese E-Mail noch nicht registriert ist, kannst du nun unten eine Einladungs-E-Mail senden.`);
+      } else {
+        setShareSuccess(`Erfolgreich geteilt! '${shareEmail.trim()}' kann nun auf das Konto zugreifen.`);
+        setShareEmail('');
+        setTimeout(() => {
+          setActiveModal(null);
+          setShareSuccess(null);
+        }, 3000);
+      }
+    } catch (err: unknown) {
+      console.error(err);
+      setFormError(err instanceof Error ? err.message : 'Fehler beim Teilen des Kontos.');
     }
   };
 
@@ -1025,6 +1090,114 @@ export const ParentDashboard: React.FC = () => {
               );
             })
           )}
+        </div>
+      </Modal>
+
+      {/* 5. Share Child Modal */}
+      <Modal
+        isOpen={activeModal === 'shareChild'}
+        onClose={() => setActiveModal(null)}
+        title={`Konto teilen: ${selectedChild?.name}`}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {formError && (
+            <div style={{ background: 'var(--color-danger-bg)', color: 'var(--color-danger)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem' }}>
+              {formError}
+            </div>
+          )}
+          {shareSuccess && (
+            <div style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem' }}>
+              {shareSuccess}
+            </div>
+          )}
+
+          <div>
+            <h5 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Bereits geteilt mit:</h5>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {selectedChild?.parentEmails && selectedChild.parentEmails.length > 0 ? (
+                selectedChild.parentEmails.map(email => (
+                  <div key={email} className="flex-between" style={{ background: 'var(--bg-primary)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                    <span>{email}</span>
+                    <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>Verknüpft</span>
+                  </div>
+                ))
+              ) : (
+                <div className="flex-between" style={{ background: 'var(--bg-primary)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                  <span>{user?.email}</span>
+                  <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>Inhaber</span>
+                </div>
+              )}
+
+              {selectedChild?.pendingParentEmails?.map(email => (
+                <div key={email} className="flex-between" style={{ background: 'var(--bg-primary)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                  <span>{email}</span>
+                  <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Ausstehend</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <form onSubmit={handleShareChild} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="form-group">
+              <label className="form-label">E-Mail-Adresse des anderen Elternteils</label>
+              <input
+                type="email"
+                className="form-input"
+                placeholder="z.B. mama@email.de"
+                value={shareEmail}
+                onChange={e => setShareEmail(e.target.value)}
+                required
+                disabled={shareInvitePending}
+              />
+            </div>
+
+            {!shareInvitePending ? (
+              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+                Freigeben
+              </button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <a
+                  href={`mailto:${shareEmail.trim().toLowerCase()}?subject=Einladung%20zu%20Easy%20Pocket%20Money&body=Hallo!%20Ich%20habe%20das%20Taschengeld-Konto%20von%20${selectedChild?.name}%20f%C3%BCr%20dich%20freigegeben.%20Bitte%20melde%20dich%20unter%20${window.location.origin}%20an,%20um%20Zugriff%20zu%20erhalten.`}
+                  className="btn btn-primary"
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', textDecoration: 'none', textAlign: 'center' }}
+                  onClick={() => {
+                    setTimeout(() => {
+                      setActiveModal(null);
+                      setShareSuccess(null);
+                      setShareInvitePending(false);
+                      setShareEmail('');
+                    }, 1000);
+                  }}
+                >
+                  ✉️ Einladungs-E-Mail senden
+                </a>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.origin).then(() => {
+                      setShareSuccess('Registrierungs-Link kopiert! Kopiere ihn einfach in eine E-Mail oder einen Messenger.');
+                    });
+                  }}
+                >
+                  🔗 Registrierungs-Link kopieren
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setActiveModal(null);
+                    setShareSuccess(null);
+                    setShareInvitePending(false);
+                    setShareEmail('');
+                  }}
+                >
+                  Fertig
+                </button>
+              </div>
+            )}
+          </form>
         </div>
       </Modal>
     </div>
