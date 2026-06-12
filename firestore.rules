@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isParentOf(childData) {
+      return isSignedIn() && childData != null && ('parentIds' in childData) && (request.auth.uid in childData.parentIds);
+    }
+    
+    function getChildProfile(childId) {
+      return get(/databases/$(database)/documents/users/$(childId)).data;
+    }
+
+    match /users/{userId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isOwner(userId) || isParentOf(resource.data);
+    }
+    
+    match /transactions/{transactionId} {
+      allow create: if isSignedIn() && (
+        // A child creating their own transaction
+        request.resource.data.userId == request.auth.uid ||
+        // A parent creating a transaction for their child
+        isParentOf(getChildProfile(request.resource.data.userId))
+      );
+      
+      allow read, update, delete: if isSignedIn() && (
+        // Owner child
+        resource.data.userId == request.auth.uid ||
+        // Parent of the child
+        isParentOf(getChildProfile(resource.data.userId))
+      );
+    }
+
+    match /investmentOffers/{offerId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && (
+        request.resource.data.parentId == request.auth.uid ||
+        (resource != null && resource.data.parentId == request.auth.uid)
+      );
+    }
+
+    match /investments/{investmentId} {
+      allow create: if isSignedIn() && (
+        request.resource.data.userId == request.auth.uid ||
+        isParentOf(getChildProfile(request.resource.data.userId))
+      );
+      allow read, update, delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isParentOf(getChildProfile(resource.data.userId))
+      );
+    }
+
+    match /stockPrices/{symbol} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}
