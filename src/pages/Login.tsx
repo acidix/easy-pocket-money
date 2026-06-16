@@ -52,12 +52,7 @@ export const Login: React.FC = () => {
       gap: '1.5rem'
     }}>
       <ThemePicker />
-      <div className="glass-panel" style={{
-        width: '100%',
-        maxWidth: '440px',
-        padding: '2.5rem',
-        position: 'relative'
-      }}>
+      <div className="glass-panel login-card">
         
         {/* Demo Mode Notice */}
         {isDemo && (

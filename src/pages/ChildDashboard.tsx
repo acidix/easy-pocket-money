@@ -543,8 +543,9 @@ export const ChildDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-align-center" style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
-          <ThemePicker />
+        <ThemePicker compact />
+
+        <div className="flex-align-center" style={{ gap: '0.75rem' }}>
           <button type="button" className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }} onClick={() => setIsPinModalOpen(true)}>
             <Key size={16} />
             <span>PIN ändern</span>
@@ -559,17 +560,7 @@ export const ChildDashboard: React.FC = () => {
       {/* Main content grid */}
       <main style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         {/* Tab Selection */}
-        <div style={{
-          display: 'flex',
-          background: 'var(--border-color)',
-          padding: '4px',
-          borderRadius: '12px',
-          marginBottom: '1rem',
-          maxWidth: '780px',
-          overflowX: 'auto',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none'
-        }}>
+        <div className="tabs-scroll-container">
           <button
             type="button"
             className="btn"
@@ -859,7 +850,7 @@ export const ChildDashboard: React.FC = () => {
                   </p>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', textAlign: 'center' }}>
+                <div className="projection-grid">
                   <div style={{ background: 'var(--border-color)', padding: '0.65rem 0.5rem', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>30 Tage</span>
                     <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-success)' }} title="Prognostiziertes Gesamtvermögen">{projections.d30.total.toFixed(2)} {symbol}</span>

@@ -36,6 +36,32 @@ const INTERVAL_LABELS: Record<AllowanceInterval, string> = {
   monthly: 'Monatlich'
 };
 
+const getAvatarStyle = (name: string) => {
+  const colors = [
+    'linear-gradient(135deg, #7c3aed, #00f0ff)', // Purple to Cyan
+    'linear-gradient(135deg, #ff007f, #ff7700)', // Pink to Orange
+    'linear-gradient(135deg, #39ff14, #00ff66)', // Green to Lime
+    'linear-gradient(135deg, #ffe600, #ff7700)', // Yellow to Orange
+    'linear-gradient(135deg, #ff0055, #7c3aed)'  // Red to Purple
+  ];
+  const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const gradient = colors[hash % colors.length];
+  return {
+    background: gradient,
+    color: '#ffffff',
+    textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+    boxShadow: '0 0 10px rgba(0, 0, 0, 0.2)'
+  };
+};
+
+const getInitials = (name: string) => {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+};
+
 interface ChildCardProps {
   child: UserProfile;
   getCurrencySymbol: (code: string) => string;
@@ -87,6 +113,8 @@ const ChildCard: React.FC<ChildCardProps> = ({ child, getCurrencySymbol, openMod
   const achievements = useAchievements(child, transactions, investments, prices);
   const unlockedBadges = useMemo(() => achievements.filter(a => a.unlocked), [achievements]);
 
+  const avatarStyle = getAvatarStyle(child.name);
+  const initials = getInitials(child.name);
   const symbol = getCurrencySymbol(child.currency);
   const hasAllowances = child.allowances && child.allowances.length > 0;
 
@@ -98,59 +126,94 @@ const ChildCard: React.FC<ChildCardProps> = ({ child, getCurrencySymbol, openMod
       position: 'relative'
     }}>
       {/* Child Card Header */}
-      <div className="flex-between" style={{ alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <h4 style={{ fontSize: '1.3rem', fontWeight: 800 }}>{child.name}</h4>
-            <button 
-              type="button" 
-              style={{ 
-                background: 'transparent', 
-                border: 'none', 
-                color: 'var(--text-secondary)', 
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0.2rem',
-                borderRadius: '50%',
-                transition: 'all 0.2s ease',
-                outline: 'none'
-              }}
-              onClick={() => openModal('shareChild', child)}
-              title="Konto mit anderem Elternteil teilen"
-            >
-              <Share2 size={16} />
-            </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="flex-between" style={{ width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: '0.9rem',
+              ...avatarStyle
+            }}>
+              {initials}
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <h4 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)' }}>{child.name}</h4>
+                <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>
+                  @{child.username}
+                </span>
+              </div>
+            </div>
           </div>
-          <span className="badge badge-warning" style={{ fontSize: '0.7rem', marginTop: '0.25rem' }}>
-            @{child.username}
-          </span>
+          
+          <button 
+            type="button" 
+            style={{ 
+              background: 'transparent', 
+              border: 'none', 
+              color: 'var(--text-secondary)', 
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0.4rem',
+              borderRadius: '50%',
+              transition: 'all 0.2s ease',
+              outline: 'none'
+            }}
+            onClick={() => openModal('shareChild', child)}
+            title="Konto mit anderem Elternteil teilen"
+          >
+            <Share2 size={16} />
+          </button>
         </div>
         
-        <div style={{ display: 'flex', gap: '1.25rem', textAlign: 'right' }}>
-          <div>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+        {/* Balances Grid (Guaranteed No Wrap) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid var(--border-color)',
+            padding: '0.65rem 0.75rem',
+            borderRadius: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.15rem'
+          }}>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
               Taschengeld
             </span>
             <span style={{ 
-              fontSize: '1.4rem', 
+              fontSize: '1.25rem', 
               fontWeight: 800, 
               color: child.balance >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
-              display: 'block'
+              whiteSpace: 'nowrap'
             }}>
               {child.balance.toFixed(2)} {symbol}
             </span>
           </div>
-          <div>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid var(--border-color)',
+            padding: '0.65rem 0.75rem',
+            borderRadius: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.15rem'
+          }}>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
               Girokonto
             </span>
             <span style={{ 
-              fontSize: '1.4rem', 
+              fontSize: '1.25rem', 
               fontWeight: 800, 
               color: 'var(--color-primary)',
-              display: 'block'
+              whiteSpace: 'nowrap'
             }}>
               {(child.giroBalance || 0).toFixed(2)} {symbol}
             </span>
@@ -188,11 +251,7 @@ const ChildCard: React.FC<ChildCardProps> = ({ child, getCurrencySymbol, openMod
       </div>
 
       {/* Quick Action Grid */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(4, 1fr)', 
-        gap: '0.5rem'
-      }}>
+      <div className="child-actions-grid">
         <button 
           type="button" 
           className="btn btn-secondary" 
@@ -580,8 +639,9 @@ export const ParentDashboard: React.FC = () => {
           </div>
         </div>
         
-        <div className="flex-align-center" style={{ gap: '1.25rem', flexWrap: 'wrap' }}>
-          <ThemePicker />
+        <ThemePicker compact />
+        
+        <div className="flex-align-center" style={{ gap: '1.25rem' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{user?.name}</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{user?.email}</div>
@@ -595,7 +655,7 @@ export const ParentDashboard: React.FC = () => {
 
       {/* Main Grid */}
       <main>
-        <div className="glass-panel p-2 flex-between" style={{ marginBottom: '2.5rem' }}>
+        <div className="glass-panel p-2 welcome-card" style={{ marginBottom: '2.5rem' }}>
           <div>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.25rem' }}>Hallo, {user?.name.split(' ')[0]}! 👋</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
@@ -614,14 +674,7 @@ export const ParentDashboard: React.FC = () => {
         </div>
 
         {/* Tab Selection */}
-        <div style={{
-          display: 'flex',
-          background: 'var(--border-color)',
-          padding: '4px',
-          borderRadius: '12px',
-          marginBottom: '2rem',
-          maxWidth: '320px'
-        }}>
+        <div className="parent-tabs-menu">
           <button
             type="button"
             className="btn"

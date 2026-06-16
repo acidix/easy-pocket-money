@@ -2,7 +2,11 @@ import React from 'react';
 import { useTheme } from '../context/ThemeContext';
 import type { NeonTheme } from '../context/ThemeContext';
 
-export const ThemePicker: React.FC = () => {
+interface ThemePickerProps {
+  compact?: boolean;
+}
+
+export const ThemePicker: React.FC<ThemePickerProps> = ({ compact = false }) => {
   const { theme, setTheme } = useTheme();
 
   const themes: { id: NeonTheme; name: string }[] = [
@@ -16,7 +20,7 @@ export const ThemePicker: React.FC = () => {
   ];
 
   return (
-    <div className="theme-picker" style={{ alignSelf: 'center' }}>
+    <div className={`theme-picker ${compact ? 'compact' : ''}`} style={{ alignSelf: 'center' }}>
       {themes.map(t => (
         <button
           key={t.id}
@@ -26,7 +30,7 @@ export const ThemePicker: React.FC = () => {
           title={`Farbschema: ${t.name}`}
         >
           <span className={`theme-dot ${t.id}`}></span>
-          <span>{t.name}</span>
+          {!compact && <span>{t.name}</span>}
         </button>
       ))}
     </div>

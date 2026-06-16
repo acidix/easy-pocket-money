@@ -222,7 +222,7 @@ export const InvestmentOffersTab: React.FC<InvestmentOffersTabProps> = ({ childr
           Einen kostenlosen Key erhältst du in 10 Sekunden auf <a href="https://twelvedata.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>twelvedata.com</a>.
         </p>
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="api-key-container">
           <div style={{ flex: 1, minWidth: '260px' }}>
             <input
               type="text"
@@ -284,17 +284,13 @@ export const InvestmentOffersTab: React.FC<InvestmentOffersTabProps> = ({ childr
 
             <div className="form-group">
               <label className="form-label">Anlagestruktur</label>
-              <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--border-color)', padding: '3px', borderRadius: '10px' }}>
+              <div className="toggle-group">
                 <button
                   type="button"
                   className="btn"
                   style={{
-                    flex: 1,
                     background: offerType === 'festgeld' ? 'var(--bg-surface-opaque)' : 'transparent',
-                    color: offerType === 'festgeld' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    borderRadius: '8px',
-                    padding: '0.5rem',
-                    fontSize: '0.85rem'
+                    color: offerType === 'festgeld' ? 'var(--text-primary)' : 'var(--text-secondary)'
                   }}
                   onClick={() => setOfferType('festgeld')}
                 >
@@ -304,12 +300,8 @@ export const InvestmentOffersTab: React.FC<InvestmentOffersTabProps> = ({ childr
                   type="button"
                   className="btn"
                   style={{
-                    flex: 1,
                     background: offerType === 'aktienfonds' ? 'var(--bg-surface-opaque)' : 'transparent',
-                    color: offerType === 'aktienfonds' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    borderRadius: '8px',
-                    padding: '0.5rem',
-                    fontSize: '0.85rem'
+                    color: offerType === 'aktienfonds' ? 'var(--text-primary)' : 'var(--text-secondary)'
                   }}
                   onClick={() => setOfferType('aktienfonds')}
                 >
